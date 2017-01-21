@@ -1,0 +1,212 @@
+<html lang="en" data-ember-extension="1"><head>
+    <title>Etcd clusters</title>
+    <link rel="shortcut icon" href="/ui/assets/img/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/ui/assets/img/favicon.ico" type="image/x-icon">
+    <script src="/ui/assets/js/vendor/jquery-3.1.0.min.js"></script>
+    <link href="/ui/assets/fonts/Montserrat-Regular.ttf" rel="stylesheet">
+    <link href="/ui/assets/fonts/OpenSans-Regular.ttf" rel="stylesheet">
+    <link href="/ui/assets/fonts/OpenSans-Semibold.ttf" rel="stylesheet">
+    <link rel="stylesheet" href="/ui/assets/css/main.css">
+    <script src="/ui/assets/js/main.js"></script>
+    <script src="/ui/assets/js/modal.js"></script>
+    <script src="/ui/assets/js/dropdown.js"></script>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <a href="/" id="logo">
+                Supergiant
+            </a>
+            <div id="nav">
+                <a class="" href="#">Sessions</a>
+                <a class="" href="#">Users</a>
+                <a class="" href="#">Cloud Accounts</a>
+                <a class="active" href="/ui/assets/html/etcd-clusters.html">Etcd clusters</a>
+                <a class="" href="/ui/assets/html/kubes.html">Kubes</a>
+                <a class="" href="/ui/assets/html/nodes.html">Nodes</a>
+                <a class="" href="#">Entrypoints</a>
+                <a class="" href="#">Listeners</a>
+                <a class="" href="#">Volumes</a>
+                <a class="" href="#">Kube Resources</a>
+            </div>
+        </div>
+        <div id="content">
+<!--             <script src="/ui/assets/js/index.js"></script>
+ -->            <div class="modal fade" id="confirm_action" tabindex="-1" role="dialog" aria-labelledby="confirmAction">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                            <h4 class="modal-title" id="confirmAction">Are you sure?</h4>
+                        </div>
+                        <div class="modal-body">
+                            <p>
+                                You are about to <strong id="modal_action_name" class="text-info"></strong> the following items:
+                            </p>
+                        <ul id="modal_list"></ul>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                        <button type="button" class="btn btn-primary" data-dismiss="modal" id="confirm_action_btn"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="new_options" tabindex="-1" role="dialog" aria-labelledby="newOption">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                        <h4 class="modal-title" id="newOption">Select an option</h4>
+                    </div>
+                    <div class="modal-body">
+                        <select class="form-control input-lg" onchange="window.location.href = '\/ui\/kubes/new?option=' + $(this).val()">
+                            <option disabled="" selected="" value=""> -- </option>
+                            <option value="aws">AWS</option>
+                            <option value="digitalocean">DigitalOcean</option>
+                            <option value="openstack">OpenStack</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="system" tabindex="-1" role="dialog" aria-labelledby="system">
+            <div class="modal-dialog" role="document" style="width: 80%">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                        <h4 class="modal-title" id="system">Supergiant unversioned</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div id="log"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="control-bar">
+            <div class="btn-group">
+                <a class="btn btn-primary" href="#" data-toggle="modal" data-target="#new_options" id="new">New</a>
+                <div class="dropdown">
+                    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown">Actions</button>
+                    <ul class="dropdown-menu">
+                        <li><a href="#" data-method="DELETE" data-batch-action-path="" data-toggle="modal" data-target="#confirm_action" disabled="" class="disabled">Delete</a></li>
+                        <li><a href="#" data-method="POST" data-batch-action-path="/provision" data-toggle="modal" data-target="#confirm_action" disabled="" class="disabled">Reprovision</a></li>
+                        <li><a href="#" data-method="POST" data-batch-action-path="/expand" data-toggle="modal" data-target="#confirm_action" disabled="" class="disabled">Expand</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div id="searchbar-icon"></div>
+            <div id="filters"></div>
+            <input id="searchbar" type="text" placeholder="field:value">
+            <ul id="mini-nav">
+                <li><a href="#" data-toggle="modal" data-target="#system">System</a></li>
+                <li><a href="#" id="logout">Logout</a></li>
+            </ul>
+        </div>
+        <!-- <script type="text/javascript">
+            $(function() {
+                $('#logout').click(function() {
+                    $.ajax({
+                        type: 'DELETE',
+                        url: '/api/v0/sessions/7vVJ3PximO3UByqJabNT3iBCfbiSnSoB',
+                        beforeSend: function(xhr){
+                            xhr.setRequestHeader('Authorization', 'SGAPI session="' + getCookie('supergiant_session') + '"');
+                        },
+                        success: function() {
+                            location.reload();
+                        }
+                    })
+                    return false;
+                });
+            });
+        </script> -->
+        <div id="item_list_container">
+
+            <style>
+
+                    th.small,
+                    td.small {
+                        width: 40px;
+                    }
+                    th, td {
+                        overflow: visible;
+                    }
+                    th a, td a {
+                        overflow: visible;
+                    }
+                    table th:first-child img {
+                        margin-left: 10px;
+                    }
+
+            </style>
+
+            <table id="item_list">
+                <thead>
+                    <tr>
+                        <th class="small">
+                            <img width="30" height="30" src="/ui/assets/img/etcd.svg" alt="etcd" title="etcd">
+                        </th>
+                        <th>Name</th>
+                        <th>Ready</th>
+                        <th style="width:25px">
+                            <img width="20" height="20" src="/ui/assets/img/kubernetes.svg" alt="kubernetes" title="kubernetes">
+                        </th>
+                        <th>k8s cluster</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="item" data-old-item="false" id="item_18">
+                        <td class="item_selector small">
+                            <div class="checkbox">
+                                <input type="checkbox" id="128">
+                                <label for="128"></label>
+                            </div>
+                        </td>
+                        <td>
+                            <a href="/ui/assets/html/etcd-cluster.html">test-cluster</a>
+                        </td>
+                        <td>
+                            <a href="/ui/assets/html/nodes.html">3 / 3</a>
+                        </td>
+                        <td colspan="2" class="small">
+                            <a href="/ui/assets/html/kubes.html">k8s-cluster</a>
+                        </td>
+                        <td>
+                            <div class="status status-ok"></div>
+                            <div class="status status-ok"></div>
+                            <div class="status status-ok"></div>
+                        </td>
+                    </tr>
+                    <tr class="item" data-old-item="false" id="item_18">
+                        <td class="item_selector">
+                            <div class="checkbox">
+                                <input type="checkbox" id="138">
+                                <label for="138"></label>
+                            </div>
+                        </td>
+                        <td>
+                            <a href="/ui/assets/html/etcd-cluster.html">a-new-cluster</a>
+                        </td>
+                        <td>
+                            <a href="/ui/assets/html/nodes.html">1 / 3</a>
+                        </td>
+                        <td colspan="2" class="small">
+
+                        </td>
+                        <td>
+                            <div class="status status-warning"></div>
+                            <div class="status status-transitioning"></div>
+                            <div class="status status-transitioning"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+            <nav aria-label="Page navigation">
+                <ul class="pagination"></ul>
+            </nav>
+        </div>
+    </div>
+</div>
+</body>
+</html>

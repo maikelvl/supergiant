@@ -1,0 +1,73 @@
+<html lang="en" data-ember-extension="1"><head>
+    <title>Etcd clusters</title>
+    <link rel="shortcut icon" href="/ui/assets/img/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/ui/assets/img/favicon.ico" type="image/x-icon">
+    <script src="/ui/assets/js/vendor/jquery-3.1.0.min.js"></script>
+    <link href="/ui/assets/fonts/Montserrat-Regular.ttf" rel="stylesheet">
+    <link href="/ui/assets/fonts/OpenSans-Regular.ttf" rel="stylesheet">
+    <link href="/ui/assets/fonts/OpenSans-Semibold.ttf" rel="stylesheet">
+    <link rel="stylesheet" href="/ui/assets/css/main.css">
+    <script src="/ui/assets/js/main.js"></script>
+    <script src="/ui/assets/js/modal.js"></script>
+    <script src="/ui/assets/js/dropdown.js"></script>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <a href="/" id="logo">
+                Supergiant
+            </a>
+            <div id="nav">
+                <a class="" href="#">Sessions</a>
+                <a class="" href="#">Users</a>
+                <a class="" href="#">Cloud Accounts</a>
+                <a class="active" href="/ui/assets/html/etcd-clusters.html">Etcd clusters</a>
+                <a class="" href="/ui/assets/html/kubes.html">Kubes</a>
+                <a class="" href="/ui/assets/html/nodes.html">Nodes</a>
+                <a class="" href="#">Entrypoints</a>
+                <a class="" href="#">Listeners</a>
+                <a class="" href="#">Volumes</a>
+                <a class="" href="#">Kube Resources</a>
+            </div>
+        </div>
+        <div id="content">
+
+            <div class="row" id="main_row">
+                <div class="col-xs-12">
+                    <div class="row">
+                        <div class="col-xs-12">
+
+                            <div style="padding: 15px">
+                                <textarea rows="30" class="form-control" readonly="">
+{
+    "id": 22,
+    "uuid": "9f60-b4ea53fe77a8-4f83efc1-6644-4aff",
+    "created_at": "2017-01-21T12:10:54.200847407+01:00",
+    "updated_at": "2017-01-21T12:14:23.611731107+01:00",
+    "cloud_account_name": "Supergiant",
+    "name": "test-cluster",
+    "kube_name": "k8s-cluster",
+    "status": "ready",
+    "nodes": 3,
+    "node_sizes": [
+        "512mb",
+        "1gb",
+        "2gb",
+    ],
+    "digitalocean_config": {
+        "region": "fra1",
+        "ssh_key_fingerprint": "46:0d:8f:a6:f7:70:42:5c:5e:36:db:41:10:ab:36:38",
+        "master_id": 37878808
+    },
+    "ready": true
+}
+                                </textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
