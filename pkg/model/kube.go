@@ -72,7 +72,7 @@ type AWSKubeConfig struct {
 	BucketName          string              `json:"bucket_name,omitempty" sg:"readonly"`
 	NodeVolumeSize      int                 `json:"node_volume_size" sg:"default=100"`
 	MasterVolumeSize    int                 `json:"master_volume_size" sg:"default=100"`
-	KubernetesVersion   string              `json:"kubernetes_version" validate:"nonzero" sg:"default=1.5.1"`
+	KubernetesVersion   string              `json:"kubernetes_version" validate:"nonzero" sg:"default=1.5.3"`
 
 	MasterPrivateIP               string   `json:"master_private_ip" sg:"readonly"`
 	LastSelectedAZ                string   `json:"last_selected_az" sg:"readonly"` // if using multiAZ this is the last az the node build used.
@@ -95,6 +95,9 @@ type DOKubeConfig struct {
 	SSHKeyFingerprint string `json:"ssh_key_fingerprint" validate:"nonzero"`
 
 	MasterID int `json:"master_id" sg:"readonly"`
+	KubernetesVersion string `json:"kubernetes_version" validate:"nonzero" sg:"default=1.5.3"`
+	HyperkubeImageURL string `json:"hyperkube_image_url" validate:"nonzero" sg:"default=quay.io/coreos/hyperkube"`
+	HyperkubeImageTag string `json:"hyperkube_image_tag" validate:"nonzero" sg:"default=v1.5.3_coreos.0"`
 }
 
 // OSKubeConfig holds do specific information about Open Stack based KUbernetes clusters.

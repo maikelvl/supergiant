@@ -1,282 +1,170 @@
 #cloud-config
 
+manage_etc_hosts: localhost
+role: workers
 coreos:
   update:
     reboot-strategy: off
-  flannel:
-    iface: $public_ipv4
-    etcd_endpoints: http://{{ .Kube.MasterPublicIP }}:2379
+  locksmith:
+    endpoint: "http://127.0.0.1:2379"
+  fleet:
+    metadata: "role=worker,region=fra1"
+    etcd_servers: "http://127.0.0.1:2379"
   units:
-    - name: docker.service
-      drop-ins:
-        - name: 40-flannel.conf
-          content: |
-            [Unit]
-            Requires=flanneld.service
-            After=flanneld.service
-            [Service]
-            Restart=always
-            Restart=on-failure
-    - name: flanneld.service
-      content: |
-        [Unit]
-        Description=Network fabric for containers
-        Documentation=https://github.com/coreos/flannel
-        Requires=early-docker.service
-        After=etcd.service etcd2.service early-docker.service
-        Before=early-docker.target
-        [Service]
-        Type=notify
-        Restart=always
-        RestartSec=5
-        Environment="TMPDIR=/var/tmp/"
-        Environment="DOCKER_HOST=unix:///var/run/early-docker.sock"
-        Environment="FLANNEL_VER=0.5.5"
-        Environment="ETCD_SSL_DIR=/etc/ssl/etcd"
-        Environment="FLANNEL_ENV_FILE=/run/flannel/options.env"
-        LimitNOFILE=40000
-        LimitNPROC=1048576
-        ExecStartPre=/sbin/modprobe ip_tables
-        ExecStartPre=/usr/bin/mkdir -p /run/flannel
-        ExecStartPre=/usr/bin/mkdir -p ${ETCD_SSL_DIR}
-        ExecStartPre=-/usr/bin/touch ${FLANNEL_ENV_FILE}
-        ExecStart=/usr/libexec/sdnotify-proxy /run/flannel/sd.sock \
-          /usr/bin/docker run --net=host --privileged=true --rm \
-          --volume=/run/flannel:/run/flannel \
-          --env=NOTIFY_SOCKET=/run/flannel/sd.sock \
-          --env-file=${FLANNEL_ENV_FILE} \
-          --volume=/usr/share/ca-certificates:/etc/ssl/certs:ro \
-          --volume=${ETCD_SSL_DIR}:/etc/ssl/etcd:ro \
-          quay.io/coreos/flannel:${FLANNEL_VER} /opt/bin/flanneld --ip-masq=true
-        # Update docker options
-        ExecStartPost=/usr/bin/docker run --net=host --rm -v /run:/run \
-          quay.io/coreos/flannel:${FLANNEL_VER} \
-          /opt/bin/mk-docker-opts.sh -d /run/flannel_docker_opts.env -i
-    - name: kubelet.service
+    - name: calico-node.service
       command: start
+      enable: true
       content: |
-        # /usr/lib64/systemd/system/kubelet.service
         [Unit]
-        Description=Kubernetes Kubelet
+        Description=Calico node for network policy
+        Requires=network-online.target,etcd2.service
+        After=network-online.target
+
         [Service]
-        ExecStartPre=/bin/bash -c "/opt/bin/download-k8s-binary kubelet"
-        ExecStart=/opt/bin/kubelet \
-          --allow-privileged=true \
-          --api_servers=https://{{ .Kube.MasterPublicIP }} \
-          --cluster-dns=10.3.0.10 \
-          --cluster_domain=cluster.local \
-          --config=/etc/kubernetes/manifests \
-          --hostname-override=$public_ipv4 \
-          --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml \
-          --volume-plugin-dir=/etc/kubernetes/volumeplugins \
-          --register-node=true \
-        Restart=on-failure
-        RestartSec=5
+        Slice=machine.slice
+        KillMode=mixed
+        Restart=always
+        TimeoutStartSec=0
+        Environment=CALICO_DISABLE_FILE_LOGGING=true
+        Environment=HOSTNAME=$public_ipv4
+        Environment=IP=$public_ipv4
+        Environment=FELIX_FELIXHOSTNAME=$public_ipv4
+        Environment=CALICO_NETWORKING=false
+        Environment=NO_DEFAULT_POOLS=true
+        Environment=ETCD_ENDPOINTS=http://127.0.0.1:2379
+        ExecStart=/usr/bin/rkt run \
+          --inherit-env \
+          --stage1-from-dir=stage1-fly.aci \
+          --volume=modules,kind=host,source=/lib/modules,readOnly=false \
+          --mount=volume=modules,target=/lib/modules \
+          --trust-keys-from-https quay.io/calico/node:v0.20.0
+
         [Install]
         WantedBy=multi-user.target
+    - name: docker.service
+      command: start
+      enable: true
+      drop-ins:
+        - name: 60-wait-for-flannel-config.conf
+          content: |
+            [Unit]
+            After=flanneld.service
+            Requires=flanneld.service
+            Restart=always
+    - name: etcd2.service
+      command: start
+      enable: true
+      drop-ins:
+      - name: 20-cloudinit.conf
+        content: |
+          [Service]
+          Environment="ETCD_NAME=%H"
+          Environment="ETCD_PROXY=on"
+          Environment="ETCD_INITIAL_CLUSTER=infra1=http://{{ .Kube.MasterPrivateIP }}:2380"
+          Environment="ETCD_LISTEN_CLIENT_URLS=http://127.0.0.1:2379"
+    - name: flanneld.service
+      command: start
+      enable: true
+    - name: kubelet.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Kubernetes Kubelet
+        Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+        [Service]
+        Restart=always
+        RestartSec=10
+        TimeoutSec=300
+        ExecStartPre=/usr/bin/mkdir -p /etc/kubernetes/manifests
+        EnvironmentFile=/etc/environment
+        Environment="RKT_RUN_ARGS=--volume var-log,kind=host,source=/var/log --mount volume=var-log,target=/var/log"
+        Environment=KUBELET_IMAGE_URL={{ .Kube.DigitalOceanConfig.HyperkubeImageURL }}
+        Environment=KUBELET_IMAGE_TAG={{ .Kube.DigitalOceanConfig.HyperkubeImageTag }}
+        ExecStartPre=/usr/bin/mkdir -p /var/log/containers
+        ExecStartPre=/opt/bin/download-k8s-binary
+        ExecStart=/usr/lib/coreos/kubelet-wrapper \
+          --api-servers=https://{{ .Kube.MasterPrivateIP }} \
+          --network-plugin-dir=/etc/kubernetes/cni/net.d \
+          --network-plugin=cni \
+          --allow-privileged=true \
+          --register-schedulable=true \
+          --pod-manifest-path=/etc/kubernetes/manifests \
+          --hostname-override=$private_ipv4 \
+          --cluster_dns=10.3.0.10 \
+          --cluster_domain=cluster.local \
+          --kubeconfig=/etc/kubernetes/worker-kubeconfig \
+          --v=2
+
+        [Install]
+        WantedBy=multi-user.target
+    - name: setup-network-environment.service
+      command: start
+      enable: true
+      content: |
+        [Unit]
+        Description=Setup Network Environment
+        Documentation=https://github.com/kelseyhightower/setup-network-environment
+        Requires=network-online.target
+        After=network-online.target
+
+        [Service]
+        ExecStartPre=-/usr/bin/mkdir -p /opt/bin
+        ExecStartPre=/usr/bin/curl -L -o /opt/bin/setup-network-environment -z /opt/bin/setup-network-environment https://github.com/kelseyhightower/setup-network-environment/releases/download/1.0.1/setup-network-environment
+        ExecStartPre=/usr/bin/chmod +x /opt/bin/setup-network-environment
+        ExecStart=/opt/bin/setup-network-environment
+        RemainAfterExit=yes
+        Type=oneshot
+    - name: sshd.socket
+      command: restart
+      runtime: true
+      content: |
+        [Socket]
+        ListenStream=22022
+        FreeBind=true
+        Accept=yes
 write_files:
   - path: /opt/bin/download-k8s-binary
     permissions: 0755
     content: |
       #!/bin/bash
-      K8S_VERSION=v1.2.0
-      mkdir -p /opt/bin
-      FILE=$1
-      if [ ! -f /opt/bin/$FILE ]; then
-        curl -sSL -o /opt/bin/$FILE https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/$FILE
-        chmod +x /opt/bin/$FILE
-      else
-        # we check the version of the binary
-        INSTALLED_VERSION=$(/opt/bin/$FILE --version)
-        MATCH=$(echo "${INSTALLED_VERSION}" | grep -c "${K8S_VERSION}")
-        if [ $MATCH -eq 0 ]; then
-          # the version is different
-          curl -sSL -o /opt/bin/$FILE https://storage.googleapis.com/kubernetes-release/release/${K8S_VERSION}/bin/linux/amd64/$FILE
-          chmod +x /opt/bin/$FILE
-        fi
-      fi
-
       cd /tmp
       wget https://github.com/digitalocean/doctl/releases/download/v1.4.0/doctl-1.4.0-linux-amd64.tar.gz
       tar xf /tmp/doctl-1.4.0-linux-amd64.tar.gz
       sudo mv /tmp/doctl /opt/bin/
-  - path: /root/.config/doctl/config.yaml
-    permissions: 0600
+  - path: /run/systemd/system/etcd.service.d/30-certificates.conf
+    permissions: 0644
     content: |
-      access-token: {{ .Token }}
-      output: text
-  - path: /etc/kubernetes/volumeplugins/supergiant.io~digitalocean/digitalocean
-    permissions: 0755
+      [Service]
+      Environment=ETCD_CA_FILE=/etc/ssl/etcd/certs/ca.pem
+      Environment=ETCD_CERT_FILE=/etc/ssl/etcd/certs/etcd.pem
+      Environment=ETCD_KEY_FILE=/etc/ssl/etcd/private/etcd.pem
+      Environment=ETCD_PEER_CA_FILE=/etc/ssl/etcd/certs/ca.pem
+      Environment=ETCD_PEER_CERT_FILE=/etc/ssl/etcd/certs/etcd.pem
+      Environment=ETCD_PEER_KEY_FILE=/etc/ssl/etcd/private/etcd.pem
+  - path: /etc/kubernetes/cni/net.d/10-calico.conf
+    permissions: 0644
     content: |
-      #!/bin/bash
-
-      # Required Flex Volume Options.
-      #{
-      #  "volumeID": "bar",
-      #  "name": "foo"
-      #}
-
-
-      # Who am i?
-      # Where am i?
-      PUBLICIP=$(wget http://ipinfo.io/ip -qO -)
-      REGION=$(/opt/bin/doctl compute droplet list --config /root/.config/doctl/config.yaml| grep ${PUBLICIP} | awk '{print $7}')
-      DROPLET_ID=$(/opt/bin/doctl compute droplet list --config /root/.config/doctl/config.yaml| grep ${PUBLICIP} | awk '{print $1}')
-
-      usage() {
-        err "Invalid usage. Usage: "
-        err "\t$0 init"
-        err "\t$0 attach <json params>"
-        err "\t$0 detach <mount device>"
-        err "\t$0 mount <mount dir> <mount device> <json params>"
-        err "\t$0 unmount <mount dir>"
-        exit 1
+      {
+          "name": "calico",
+          "type": "flannel",
+          "delegate": {
+              "type": "calico",
+              "etcd_endpoints": "http://127.0.0.1:2379",
+              "log_level": "none",
+              "log_level_stderr": "info",
+              "hostname": "$public_ipv4",
+              "policy": {
+                  "type": "k8s",
+                  "k8s_api_root": "https://{{ .Kube.MasterPrivateIP }}:443",
+                  "k8s_auth_token": "{{ .Kube.Password }}"
+              },
+              "kubernetes": {
+                  "kubeconfig": "/etc/kubernetes/worker-kubeconfig"
+              }
+          }
       }
-
-      err() {
-        echo -ne $* 1>&2
-      }
-
-      log() {
-        echo -ne $* >&1
-      }
-
-      ismounted() {
-        MOUNT=`findmnt -n ${MNTPATH} 2>/dev/null | cut -d' ' -f1`
-        if [ "${MOUNT}" == "${MNTPATH}" ]; then
-          echo "1"
-        else
-          echo "0"
-        fi
-      }
-
-      attach() {
-        VOLUMEID=$(echo $1 | jq -r '.volumeID')
-        VOLUMENAME=$(echo $1 | jq -r '.name')
-
-        /opt/bin/doctl compute volume-action attach $VOLUMEID $DROPLET_ID --config /root/.config/doctl/config.yaml >/dev/null 2>&1
-
-        # Find the new volume.
-        DEVNAME="/dev/disk/by-id/scsi-0DO_Volume_${VOLUMENAME}"
-
-        # Wait for attach
-        NEXT_WAIT_TIME=1
-        until ls -l $DEVNAME >/dev/null 2>&1 || [ $NEXT_WAIT_TIME -eq 4 ]; do
-         sleep $(( NEXT_WAIT_TIME++ ))
-        done
-
-        #Record the actual device name.
-        DVSHRTNAME=$(ls -l /dev/disk/by-id | grep ${VOLUMENAME} | awk '{print $11}' | sed 's/\.\.\///g' | sed '/^\s*$/d')
-        DMDEV="/dev/${DVSHRTNAME}"
-        # Error check.
-        if [ ! -b "${DMDEV}" ]; then
-          err "{\"status\": \"Failure\", \"message\": \"Volume ${DMDEV} does not exist\"}"
-          exit 1
-        fi
-        log "{\"status\": \"Success\", \"device\":\"${DMDEV}\"}"
-        exit 0
-      }
-
-      detach() {
-        # This is nasty, I would prefer to use doctl for detach as well... but it appears that it is bugged.
-        # I will update this when a new version of doctl releases. For now raw api.
-        TOKEN=$(cat ~/.config/doctl/config.yaml | grep access-token | awk '{print $2}')
-        SRTDEVNAME=$(echo $1 | sed 's/\/dev\///')
-        VOLNAME=$(ls -l /dev/disk/by-id | grep ${SRTDEVNAME} | awk '{print $9}' | sed 's/scsi-0DO_Volume_//')
-        curl -X POST -H "Content-Type: application/json" -H "Authorization: Bearer ${TOKEN}" -d "{\"type\": \"detach\", \"droplet_id\": \"${DROPLET_ID}\", \"volume_name\": \"${VOLNAME}\", \"region\": \"nyc1\"}" "https://api.digitalocean.com/v2/volumes/actions" >/dev/null 2>&1
-
-        if [ -b "$1" ]; then
-          log "{\"status\": \"Success\"}"
-          exit 0
-        fi
-        exit 1
-      }
-
-      domount() {
-        MNTPATH=$1
-        DMDEV=$2
-        FSTYPE=$(echo $3|jq -r '.["kubernetes.io/fsType"]')
-
-
-        if [ ! -b "${DMDEV}" ]; then
-          err "{\"status\": \"Failure\", \"message\": \"${DMDEV} does not exist\"}"
-          exit 1
-        fi
-
-        if [ $(ismounted) -eq 1 ] ; then
-          log "{\"status\": \"Success\"}"
-          exit 0
-        fi
-
-        VOLFSTYPE=`blkid -o udev ${DMDEV} 2>/dev/null|grep "ID_FS_TYPE"|cut -d"=" -f2`
-        if [ "${VOLFSTYPE}" == "" ]; then
-          mkfs -t ${FSTYPE} ${DMDEV} >/dev/null 2>&1
-          if [ $? -ne 0 ]; then
-            err "{ \"status\": \"Failure\", \"message\": \"Failed to create fs ${FSTYPE} on device ${DMDEV}\"}"
-            exit 1
-          fi
-        fi
-
-        mkdir -p ${MNTPATH} &> /dev/null
-
-        mount ${DMDEV} ${MNTPATH} &> /dev/null
-        if [ $? -ne 0 ]; then
-          err "{ \"status\": \"Failure\", \"message\": \"Failed to mount device ${DMDEV} at ${MNTPATH}\"}"
-          exit 1
-        fi
-        log "{\"status\": \"Success\"}"
-        exit 0
-      }
-
-      unmount() {
-        MNTPATH=$1
-        if [ $(ismounted) -eq 0 ] ; then
-          log "{\"status\": \"Success\"}"
-          exit 0
-        fi
-
-        umount ${MNTPATH} &> /dev/null
-        if [ $? -ne 0 ]; then
-          err "{ \"status\": \"Failed\", \"message\": \"Failed to unmount volume at ${MNTPATH}\"}"
-          exit 1
-        fi
-        rmdir ${MNTPATH} &> /dev/null
-
-        log "{\"status\": \"Success\"}"
-        exit 0
-      }
-
-      op=$1
-
-      if [ "$op" = "init" ]; then
-        log "{\"status\": \"Success\"}"
-        exit 0
-      fi
-
-      if [ $# -lt 2 ]; then
-        usage
-      fi
-
-      shift
-
-      case "$op" in
-        attach)
-          attach $*
-          ;;
-        detach)
-          detach $*
-          ;;
-        mount)
-          domount $*
-          ;;
-        unmount)
-          unmount $*
-          ;;
-        *)
-          usage
-      esac
-
-      exit 1
   - path: /etc/kubernetes/manifests/kube-proxy.yaml
     permissions: 0644
     content: |
@@ -289,50 +177,52 @@ write_files:
         hostNetwork: true
         containers:
         - name: kube-proxy
-          image: gcr.io/google_containers/hyperkube:v1.2.0
+          image: {{ .Kube.DigitalOceanConfig.HyperkubeImageURL }}:{{ .Kube.DigitalOceanConfig.HyperkubeImageTag }}
           command:
           - /hyperkube
           - proxy
-          - --master=https://{{ .Kube.MasterPublicIP }}
-          - --kubeconfig=/etc/kubernetes/worker-kubeconfig.yaml
+          - --master=https://{{ .Kube.MasterPrivateIP }}
+          - --kubeconfig=/etc/kubernetes/worker-kubeconfig
           - --proxy-mode=iptables
+          - --v=2
           securityContext:
             privileged: true
           volumeMounts:
             - mountPath: /etc/ssl/certs
-              name: "ssl-certs"
-            - mountPath: /etc/kubernetes/worker-kubeconfig.yaml
-              name: "kubeconfig"
+              name: ssl-certs
+            - mountPath: /etc/kubernetes/worker-kubeconfig
+              name: kubeconfig
               readOnly: true
             - mountPath: /etc/kubernetes/ssl
-              name: "etc-kube-ssl"
+              name: etc-kube-ssl
               readOnly: true
         volumes:
           - name: ssl-certs
             hostPath:
-              path: "/usr/share/ca-certificates"
+              path: /usr/share/ca-certificates
           - name: kubeconfig
             hostPath:
-              path: "/etc/kubernetes/worker-kubeconfig.yaml"
+              path: "/etc/kubernetes/worker-kubeconfig"
           - name: etc-kube-ssl
             hostPath:
               path: "/etc/kubernetes/ssl"
-  - path: /etc/kubernetes/worker-kubeconfig.yaml
+  - path: /etc/kubernetes/worker-kubeconfig
     permissions: 0644
     content: |
       apiVersion: v1
       kind: Config
+      clusters:
+      - name: local
+        cluster:
+          server: https://{{ .Kube.MasterPrivateIP }}
+          insecure-skip-tls-verify: true
       users:
       - name: kubelet
         user:
           token: {{ .Kube.Password }}
-      clusters:
-      - name: local
-        cluster:
-           insecure-skip-tls-verify: true
       contexts:
       - context:
           cluster: local
           user: kubelet
-        name: service-account-context
-      current-context: service-account-context
+        name: kubelet-context
+      current-context: kubelet-context
