@@ -19,7 +19,7 @@ func (p *Provider) CreateNode(m *model.Node, action *core.Action) error {
     if err != nil {
         return err
     }
-    minionTemplate, err := template.New("master_template").Parse(string(minionUserdataTemplate))
+    minionTemplate, err := template.New("minion_template").Parse(string(minionUserdataTemplate))
     if err != nil {
         return err
     }
