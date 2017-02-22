@@ -2,6 +2,7 @@ package digitalocean
 
 import (
     "bytes"
+    "strings"
     "text/template"
     "time"
 
@@ -9,6 +10,7 @@ import (
     "github.com/supergiant/supergiant/bindata"
     "github.com/supergiant/supergiant/pkg/core"
     "github.com/supergiant/supergiant/pkg/model"
+    "github.com/supergiant/supergiant/pkg/util"
 )
 
 // CreateKube creates a new DO kubernetes cluster.
@@ -62,7 +64,7 @@ func (p *Provider) CreateKube(m *model.Kube, action *core.Action) error {
         }
 
         dropletRequest := &godo.DropletCreateRequest{
-            Name:              m.Name + "-master",
+            Name:              m.Name + "-master-" + strings.ToLower(util.RandomString(5)),
             Region:            m.DigitalOceanConfig.Region,
             Size:              m.MasterNodeSize,
             PrivateNetworking: false,
