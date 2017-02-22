@@ -60,11 +60,11 @@ func (t *TokenSource) Token() (*oauth2.Token, error) {
 }
 
 // Create droplet
-func (p *Provider) createDroplet(client *godo.Client, action *core.Action, req *godo.DropletCreateRequest, tags []string) (droplet *godo.Droplet, publicIP string, err error) {
+func (p *Provider) createDroplet(client *godo.Client, action *core.Action, req *godo.DropletCreateRequest, tags []string) (droplet *godo.Droplet, publicIP string, privateIP string, err error) {
 	// Create
 	droplet, _, err = client.Droplets.Create(req)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 
 	// Tag (TODO error handling needs work for atomicity / idempotence)
@@ -93,11 +93,15 @@ func (p *Provider) createDroplet(client *godo.Client, action *core.Action, req *
 		if publicIP, err = droplet.PublicIPv4(); err != nil {
 			return false, err
 		}
-		return publicIP != "", nil
+		if privateIP, err = droplet.PrivateIPv4(); err != nil {
+			return false, err
+		}
+		return privateIP != "" && publicIP != "", nil
 	})
+
 	if waitErr != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 
-	return droplet, publicIP, nil
+	return droplet, publicIP, privateIP, nil
 }

@@ -20,6 +20,7 @@ type Node struct {
 	ProviderID                string    `json:"provider_id" sg:"readonly" gorm:"index"`
 	Name                      string    `json:"name" sg:"readonly" gorm:"index"`
 	ExternalIP                string    `json:"external_ip" sg:"readonly"`
+	PrivateIP                 string    `json:"private_ip" sg:"readonly"`
 	ProviderCreationTimestamp time.Time `json:"provider_creation_timestamp" sg:"readonly"`
 
 	OutOfDisk bool `json:"out_of_disk" sg:"readonly"`

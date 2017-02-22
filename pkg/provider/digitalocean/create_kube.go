@@ -67,7 +67,7 @@ func (p *Provider) CreateKube(m *model.Kube, action *core.Action) error {
             Name:              m.Name + "-master-" + strings.ToLower(util.RandomString(5)),
             Region:            m.DigitalOceanConfig.Region,
             Size:              m.MasterNodeSize,
-            PrivateNetworking: false,
+            PrivateNetworking: true,
             UserData:          string(masterUserdata.Bytes()),
             SSHKeys: []godo.DropletCreateSSHKey{
                 {
@@ -80,13 +80,14 @@ func (p *Provider) CreateKube(m *model.Kube, action *core.Action) error {
         }
         tags := []string{"Kubernetes-Cluster", m.Name, dropletRequest.Name}
 
-        masterDroplet, publicIP, err := p.createDroplet(client, action, dropletRequest, tags)
+        masterDroplet, publicIP, privateIP, err := p.createDroplet(client, action, dropletRequest, tags)
         if err != nil {
             return err
         }
 
         m.DigitalOceanConfig.MasterID = masterDroplet.ID
         m.MasterPublicIP = publicIP
+        m.MasterPrivateIP = privateIP
         return nil
     })
 

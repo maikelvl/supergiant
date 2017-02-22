@@ -56,7 +56,7 @@ func (p *Provider) CreateNode(m *model.Node, action *core.Action) error {
     }
     tags := []string{"Kubernetes-Cluster", m.Kube.Name, dropletRequest.Name}
 
-    minionDroplet, publicIP, err := p.createDroplet(p.Client(m.Kube), action, dropletRequest, tags)
+    minionDroplet, publicIP, privateIP, err := p.createDroplet(p.Client(m.Kube), action, dropletRequest, tags)
     if err != nil {
         return err
     }
@@ -72,6 +72,7 @@ func (p *Provider) CreateNode(m *model.Node, action *core.Action) error {
     m.ProviderID = strconv.Itoa(minionDroplet.ID)
     m.ProviderCreationTimestamp = createdAt
     m.ExternalIP = publicIP
+    m.PrivateIP = privateIP
     m.Name = publicIP
 
     return p.Core.DB.Save(m)

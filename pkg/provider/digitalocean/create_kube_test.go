@@ -78,6 +78,10 @@ func TestDigitalOceanProviderCreateKube(t *testing.T) {
                                                 Type:      "public",
                                                 IPAddress: "99.99.99.99",
                                             },
+                                            {
+                                                Type:      "private",
+                                                IPAddress: "10.0.0.99",
+                                            },
                                         },
                                     },
                                 }, nil, nil

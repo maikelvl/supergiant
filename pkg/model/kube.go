@@ -54,6 +54,7 @@ type Kube struct {
 	GCEConfigJSON []byte         `json:"-"`
 
 	MasterPublicIP string `json:"master_public_ip" sg:"readonly"`
+	MasterPrivateIP string `json:"master_private_ip" sg:"readonly"`
 
 	Ready bool `json:"ready" sg:"readonly" gorm:"index"`
 }
